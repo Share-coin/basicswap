@@ -15,3 +15,13 @@ class SHCInterface(BTCInterface):
 
     def max_money(self) -> int:
         return 500000000 * self.COIN()
+
+    def getWalletInfo(self):
+        rv = super().getWalletInfo()
+        if "balance" not in rv:
+            # Balances were removed from getwalletinfo in the v31 base.
+            balances = self.rpc_wallet("getbalances")["mine"]
+            rv["balance"] = balances["trusted"]
+            rv["unconfirmed_balance"] = balances["untrusted_pending"]
+            rv["immature_balance"] = balances["immature"]
+        return rv

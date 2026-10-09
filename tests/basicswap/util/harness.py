@@ -96,6 +96,10 @@ BITCOINCASH_RPC_PORT_BASE = int(
 )
 DOGECOIN_RPC_PORT_BASE = int(os.getenv("DOGECOIN_RPC_PORT_BASE", DOGE_BASE_RPC_PORT))
 
+SHC_BASE_PORT = 46832
+SHC_BASE_RPC_PORT = 47832
+SHC_RPC_PORT_BASE = int(os.getenv("SHC_RPC_PORT_BASE", SHC_BASE_RPC_PORT))
+
 EXTRA_CONFIG_JSON = json.loads(os.getenv("EXTRA_CONFIG_JSON", "{}"))
 
 
@@ -176,6 +180,7 @@ def run_prepare(
     os.environ["BCH_RPC_PORT"] = str(BITCOINCASH_RPC_PORT_BASE)
     os.environ["DOGE_PORT"] = str(DOGE_BASE_PORT)
     os.environ["DOGE_RPC_PORT"] = str(DOGECOIN_RPC_PORT_BASE)
+    os.environ["SHC_RPC_PORT"] = str(SHC_RPC_PORT_BASE)
 
     testargs = [
         f'-datadir="{datadir_path}"',
@@ -567,6 +572,41 @@ def run_prepare(
                         "connect=127.0.0.1:{}\n".format(DOGE_BASE_PORT + ip + port_ofs)
                     )
             for opt in EXTRA_CONFIG_JSON.get(f"doge{node_id}", []):
+                fp.write(opt + "\n")
+
+    if "sharecoin" in coins_array:
+        config_filename = os.path.join(datadir_path, "sharecoin", "sharecoin.conf")
+        with open(config_filename, "r") as fp:
+            lines = fp.readlines()
+        with open(config_filename, "w") as fp:
+            for line in lines:
+                if not line.startswith("prune"):
+                    fp.write(line)
+            fp.write("port={}\n".format(SHC_BASE_PORT + node_id + port_ofs))
+            fp.write("bind=127.0.0.1\n")
+            fp.write("dnsseed=0\n")
+            fp.write("discover=0\n")
+            fp.write("listenonion=0\n")
+            fp.write("debug=1\n")
+            if use_rpcauth:
+                salt = generate_salt(16)
+                rpc_user = "test_shc_" + str(node_id)
+                rpc_pass = "test_shc_pwd_" + str(node_id)
+                fp.write(
+                    "rpcauth={}:{}${}\n".format(
+                        rpc_user, salt, password_to_hmac(salt, rpc_pass)
+                    )
+                )
+                settings["chainclients"]["sharecoin"]["rpcuser"] = rpc_user
+                settings["chainclients"]["sharecoin"]["rpcpassword"] = rpc_pass
+            # The short test lock times need a lower depth than the mainnet default
+            settings["chainclients"]["sharecoin"]["blocks_confirmed"] = 2
+            for ip in range(num_nodes):
+                if ip != node_id:
+                    fp.write(
+                        "connect=127.0.0.1:{}\n".format(SHC_BASE_PORT + ip + port_ofs)
+                    )
+            for opt in EXTRA_CONFIG_JSON.get(f"shc{node_id}", []):
                 fp.write(opt + "\n")
 
     settings["startup_delay"] = 1

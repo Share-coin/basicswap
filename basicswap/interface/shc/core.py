@@ -43,6 +43,9 @@ class SHCPrepare(CoinPrepareModule):
             "core_version_no": self.version + self.version_tag,
             "core_version_group": 31,
             "min_relay_fee": 0.00001,
+            # The v31 base can no longer create legacy wallets.
+            "use_descriptors": True,
+            "watch_wallet_name": "bsx_watch",
         }
 
         if self.rpc_user != "":
@@ -119,7 +122,28 @@ class SHCPrepare(CoinPrepareModule):
     ) -> None:
         fp.write("prune=4000\n")
         fp.write("changetype=bech32\n")
+        fp.write("fallbackfee=0.0002\n")
+        fp.write(f"pid={self.name}.pid\n")
         self.writeRpcAuth(fp, salt)
+
+    def prepareDataDir(
+        self,
+        ctx: PrepareContext,
+        settings: dict,
+        chain: str,
+        extra_opts: dict,
+    ) -> None:
+        super().prepareDataDir(ctx, settings, chain, extra_opts)
+        if chain != "regtest":
+            return
+        # Sharecoin's regtest network is named sharenet.
+        core_settings = settings["chainclients"][self.name]
+        core_conf_name = core_settings.get("config_filename", self.name + ".conf")
+        core_conf_path = os.path.join(core_settings["datadir"], core_conf_name)
+        with open(core_conf_path) as fp:
+            conf = fp.read()
+        with open(core_conf_path, "w") as fp:
+            fp.write(conf.replace("[regtest]\n", "[sharenet]\n"))
 
 
 prepare_module = SHCPrepare(

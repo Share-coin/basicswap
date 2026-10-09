@@ -67,6 +67,7 @@ from tests.basicswap.util.harness import (
     FIRO_RPC_PORT_BASE,
     NMC_BASE_RPC_PORT,
     PIVX_RPC_PORT_BASE,
+    SHC_RPC_PORT_BASE,
     TEST_PATH,
     XMR_BASE_RPC_PORT,
     prepare_nodes,
@@ -122,7 +123,7 @@ def calldcrrpc(
 
 def make_rpc_func(base_rpc_port, auth_template, default_wallet=None):
 
-    def rpc_func(node_id, method, params=None, wallet=None):
+    def rpc_func(node_id, method, params=None, wallet=None, timeout=None):
         auth = auth_template.format(node_id)
         return callrpc(
             base_rpc_port + node_id,
@@ -130,6 +131,7 @@ def make_rpc_func(base_rpc_port, auth_template, default_wallet=None):
             method,
             params,
             wallet if wallet is not None else default_wallet,
+            timeout=timeout,
         )
 
     return rpc_func
@@ -154,6 +156,8 @@ def updateThread(cls):
                 cls.callbchrpc(0, "generatetoaddress", [1, cls.bch_addr])
             if cls.doge_addr is not None:
                 cls.calldogerpc(0, "generatetoaddress", [1, cls.doge_addr])
+            if cls.shc_addr is not None:
+                cls.callshcrpc(0, "generatetoaddress", [1, cls.shc_addr], timeout=120)
         except Exception as e:
             print(f"updateThread error: {e}")
         cls.delay_event.wait(random.uniform(cls.update_min, cls.update_max))
@@ -474,6 +478,26 @@ def start_processes(self):
                 0, "generatetoaddress", [num_blocks - have_blocks, self.doge_addr]
             )
 
+    if "sharecoin" in self.test_coins_list:
+        self.callshcrpc = make_rpc_func(
+            SHC_RPC_PORT_BASE + PORT_OFS,
+            "test_shc_{0}:test_shc_pwd_{0}",
+            default_wallet="bsx_wallet",
+        )
+        self.shc_addr = self.callshcrpc(0, "getnewaddress", ["mining_addr"])
+        num_blocks: int = 200
+        have_blocks: int = self.callshcrpc(0, "getblockcount")
+        if have_blocks < num_blocks:
+            logging.info(
+                f"Mining {num_blocks - have_blocks} Sharecoin blocks to {self.shc_addr}"
+            )
+            self.callshcrpc(
+                0,
+                "generatetoaddress",
+                [num_blocks - have_blocks, self.shc_addr],
+                timeout=1200,
+            )
+
     if "namecoin" in self.test_coins_list:
         self.callnmcrpc = make_rpc_func(
             NAMECOIN_RPC_PORT_BASE + PORT_OFS,
@@ -575,6 +599,7 @@ class BaseTestWithPrepare(unittest.TestCase):
     firo_addr = None
     bch_addr = None
     doge_addr = None
+    shc_addr = None
     test_coins_list = TEST_COINS_LIST.split(",")
 
     @classmethod
